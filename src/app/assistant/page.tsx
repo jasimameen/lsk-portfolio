@@ -1,6 +1,9 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import TTA from '../components/TTA';
+import { showToast } from '../utils/toast';
+import { outputAudioSpeech } from '../services/audio_services';
 
 declare global {
   interface Window {
@@ -34,7 +37,6 @@ declare global {
 }
 
 const RecordPage: React.FC = () => {
-  const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,7 @@ const RecordPage: React.FC = () => {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array | null>(null);
 
+  // Initialize speech recognition and audio context on component mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const SpeechRecognition =
@@ -50,10 +53,11 @@ const RecordPage: React.FC = () => {
 
       if (SpeechRecognition) {
         const recognitionInstance = new SpeechRecognition();
-        recognitionInstance.continuous = true;
-        recognitionInstance.interimResults = true;
-        recognitionInstance.lang = 'en-US';
+        recognitionInstance.continuous = true; // Keep listening until manually stopped
+        recognitionInstance.interimResults = true; // Display partial results
+        recognitionInstance.lang = 'en';
 
+        // Handle speech recognition results
         recognitionInstance.onresult = (event: SpeechRecognitionEvent) => {
           let finalTranscript = '';
           let interimTranscript = '';
@@ -67,15 +71,19 @@ const RecordPage: React.FC = () => {
             }
           }
 
-          setTranscript(prev => prev + finalTranscript);
+          setTranscript( finalTranscript);
         };
 
+        // Handle errors during speech recognition
         recognitionInstance.onerror = (event: SpeechRecognitionErrorEvent) => {
+          showToast("Speech recognition error");
           setError(`Error occurred in recognition: ${event.error}`);
         };
 
         setRecognition(recognitionInstance);
+        recognitionInstance.start(); // Start speech recognition immediately
       } else {
+        showToast("Speech recognition API issue");
         setError('SpeechRecognition API is not supported in this browser.');
       }
     }
@@ -86,47 +94,43 @@ const RecordPage: React.FC = () => {
     };
   }, []);
 
-  const handleRecord = async () => {
-    if (!recognition) {
-      setError('SpeechRecognition is not initialized or supported.');
-      return;
+  // Triggered when a new transcript is available
+  useEffect(() => {
+    if (transcript) {
+      outputAudioSpeech(transcript);
     }
+  }, [transcript]);
 
-    if (isRecording) {
-      recognition.stop();
-      audioContextRef.current?.close();
-      setIsRecording(false);
-    } else {
-      setTranscript('');
-      recognition.start();
-
-      // Initialize the Web Audio API
-      const audioContext = new AudioContext();
-      audioContextRef.current = audioContext;
-
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 2048;
-      analyserRef.current = analyser;
-
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      dataArrayRef.current = dataArray;
-
+  // Initialize Web Audio API for visualizing audio input
+  useEffect(() => {
+    const initializeAudio = async () => {
       try {
+        const audioContext = new AudioContext();
+        audioContextRef.current = audioContext;
+
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        analyserRef.current = analyser;
+
+        const bufferLength = analyser.frequencyBinCount;
+        const dataArray = new Uint8Array(bufferLength);
+        dataArrayRef.current = dataArray;
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const source = audioContext.createMediaStreamSource(stream);
         source.connect(analyser);
 
-        // Start animating the waveform
+        // Start drawing the waveform
         drawWaveform();
       } catch (err) {
         setError('Error accessing microphone: ' + err);
       }
+    };
 
-      setIsRecording(true);
-    }
-  };
+    initializeAudio();
+  }, []);
 
+  // Draw the waveform on the canvas
   const drawWaveform = () => {
     const canvas = canvasRef.current;
     const analyser = analyserRef.current;
@@ -177,30 +181,14 @@ const RecordPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen justify-center items-center bg-gray-900 text-white">
-      <div className="relative w-full max-w-md bg-gray-800 p-4 rounded-xl shadow-lg">
-        <canvas ref={canvasRef} className="w-full h-32 bg-gray-700 rounded-t-xl"></canvas>
-        <div className="absolute top-0 right-0 p-4">
-          <button
-            onClick={handleRecord}
-            className={`w-16 h-16 rounded-full flex items-center justify-center ${
-              isRecording ? 'bg-red-600' : 'bg-gray-600'
-            }`}
-          >
-            <div
-              className={`w-8 h-8 rounded-full ${
-                isRecording ? 'bg-red-400' : 'bg-gray-400'
-              }`}
-            />
-          </button>
-        </div>
-        <div className="mt-16 text-center text-lg font-medium">
-          {error ? (
-            <div className="text-red-500">{error}</div>
-          ) : (
-            <div>{transcript || 'Start speaking to see the transcription...'}</div>
-          )}
-        </div>
+    <div className="flex flex-col h-screen justify-center items-center bg-black text-white">
+      <canvas ref={canvasRef} className="w-1/2 h-100 mb-4"></canvas>
+      <div className="w-3/4 h-1/3 p-6 text-gray-400 overflow-y-auto bg-gray-800 rounded-xl text-sm">
+        {error ? (
+          <div className="text-red-500">{error}</div>
+        ) : (
+          transcript || 'Start speaking to see the transcription...'
+        )}
       </div>
     </div>
   );
