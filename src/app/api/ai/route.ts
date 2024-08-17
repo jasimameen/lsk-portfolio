@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import QuadMesh from "three/examples/jsm/objects/QuadMesh.js";
 
 const openai = new OpenAI({
-    apiKey: "sk-07N-BY1D2Y6lSpOSg2Dbd1fiEAukj9q-nES-hFv8ugT3BlbkFJqm_4FJNh0RHYvgwFoMj5dGy2Qu_udOfc4Y_QQIbMYA"
+    apiKey: process.env.OPEN_AI_KEY
 })
 
 const systemMsg = `Your name is Jasim Ameen. You’re a self-taught software engineer with over three years of experience in AI and web development. You started your tech journey at 17, inspired by your uncle’s interest in 3D design. You’ve worked as a Lead Software Engineer at CLICKS EXPRESS in Qatar, managing AI chatbot systems and deploying features quickly. Previously, you led development at Algorithma Digitech and created solutions at Swynfords.
